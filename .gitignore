@@ -1,3 +1,9 @@
+# rdyro modifications ###################################
+experiments/nuScenes/models/**
+# rdyro modifications ###################################
+
+*.pt
+
 pred_figs/
 processed/
 public-code/

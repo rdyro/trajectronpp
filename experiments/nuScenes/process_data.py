@@ -1,5 +1,6 @@
 import sys
 import os
+import warnings
 import numpy as np
 import pandas as pd
 import dill
@@ -171,15 +172,16 @@ def trajectory_curvature(t):
 
 def process_scene(ns_scene, env, nusc, data_path):
     scene_id = int(ns_scene['name'].replace('scene-', ''))
-    data = pd.DataFrame(columns=['frame_id',
-                                 'type',
-                                 'node_id',
-                                 'robot',
-                                 'x', 'y', 'z',
-                                 'length',
-                                 'width',
-                                 'height',
-                                 'heading'])
+    #data = pd.DataFrame(columns=['frame_id',
+    #                             'type',
+    #                             'node_id',
+    #                             'robot',
+    #                             'x', 'y', 'z',
+    #                             'length',
+    #                             'width',
+    #                             'height',
+    #                             'heading'])
+    data = []
 
     sample_token = ns_scene['first_sample_token']
     sample = nusc.get('sample', sample_token)
@@ -212,7 +214,8 @@ def process_scene(ns_scene, env, nusc, data_path):
                                     'width': annotation['size'][1],
                                     'height': annotation['size'][2],
                                     'heading': Quaternion(annotation['rotation']).yaw_pitch_roll[0]})
-            data = data.append(data_point, ignore_index=True)
+            #data = data.append(data_point, ignore_index=True)
+            data.append(data_point)
 
         # Ego Vehicle
         our_category = env.NodeType.VEHICLE
@@ -230,10 +233,12 @@ def process_scene(ns_scene, env, nusc, data_path):
                                 'height': 1.5,
                                 'heading': Quaternion(annotation['rotation']).yaw_pitch_roll[0],
                                 'orientation': None})
-        data = data.append(data_point, ignore_index=True)
+        #data = data.append(data_point, ignore_index=True)
+        data.append(data_point)
 
         sample = nusc.get('sample', sample['next'])
         frame_id += 1
+    data = pd.DataFrame(data)
 
     if len(data.index) == 0:
         return None
@@ -264,8 +269,10 @@ def process_scene(ns_scene, env, nusc, data_path):
     homography = np.array([[3., 0., 0.], [0., 3., 0.], [0., 0., 3.]])
     layer_names = ['lane', 'road_segment', 'drivable_area', 'road_divider', 'lane_divider', 'stop_line',
                    'ped_crossing', 'stop_line', 'ped_crossing', 'walkway']
-    map_mask = (nusc_map.get_map_mask(patch_box, patch_angle, layer_names, canvas_size) * 255.0).astype(
-        np.uint8)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        map_mask = (nusc_map.get_map_mask(patch_box, patch_angle, layer_names, canvas_size) * 255.0).astype(
+            np.uint8)
     map_mask = np.swapaxes(map_mask, 1, 2)  # x axis comes first
     # PEDESTRIANS
     map_mask_pedestrian = np.stack((map_mask[9], map_mask[8], np.max(map_mask[:3], axis=0)), axis=0)
