@@ -1,4 +1,6 @@
 # rdyro modifications ###################################
+**/events.out.tfevents*
+**/out.txt
 experiments/nuScenes/models/**
 # rdyro modifications ###################################
 
