@@ -5,7 +5,17 @@ from .node import MultiNode
 
 
 class Scene(object):
-    def __init__(self, timesteps, map=None, dt=1, name="", frequency_multiplier=1, aug_func=None,  non_aug_scene=None):
+    def __init__(
+        self,
+        timesteps,
+        map=None,
+        dt=1,
+        name="",
+        frequency_multiplier=1,
+        aug_func=None,
+        non_aug_scene=None,
+        extent=None,
+    ):
         self.map = map
         self.timesteps = timesteps
         self.dt = dt
@@ -24,15 +34,20 @@ class Scene(object):
         self.aug_func = aug_func
         self.non_aug_scene = non_aug_scene
 
+        assert extent is not None
+        self.extent = extent
+
     def add_robot_from_nodes(self, robot_type):
         scenes = [self]
-        if hasattr(self, 'augmented'):
+        if hasattr(self, "augmented"):
             scenes += self.augmented
 
         for scn in scenes:
             nodes_list = [node for node in scn.nodes if node.type == robot_type]
-            non_overlapping_nodes = MultiNode.find_non_overlapping_nodes(nodes_list, min_timesteps=3)
-            scn.robot = MultiNode(robot_type, 'ROBOT', non_overlapping_nodes, is_robot=True)
+            non_overlapping_nodes = MultiNode.find_non_overlapping_nodes(
+                nodes_list, min_timesteps=3
+            )
+            scn.robot = MultiNode(robot_type, "ROBOT", non_overlapping_nodes, is_robot=True)
 
             for node in non_overlapping_nodes:
                 scn.nodes.remove(node)
@@ -40,19 +55,16 @@ class Scene(object):
 
     def get_clipped_input_dict(self, timestep, state):
         input_dict = dict()
-        existing_nodes = self.get_nodes_clipped_at_time(timesteps=np.array([timestep]),
-                                                        state=state)
+        existing_nodes = self.get_nodes_clipped_at_time(timesteps=np.array([timestep]), state=state)
         tr_scene = np.array([timestep, timestep])
         for node in existing_nodes:
             input_dict[node] = node.get(tr_scene, state[node.type])
 
         return input_dict
 
-    def get_scene_graph(self,
-                        timestep,
-                        attention_radius=None,
-                        edge_addition_filter=None,
-                        edge_removal_filter=None) -> SceneGraph:
+    def get_scene_graph(
+        self, timestep, attention_radius=None, edge_addition_filter=None, edge_removal_filter=None
+    ) -> SceneGraph:
         """
         Returns the Scene Graph for a given timestep. If the Temporal Scene Graph was pre calculated,
         the temporal scene graph is sliced. Otherwise the scene graph is calculated on the spot.
@@ -69,26 +81,28 @@ class Scene(object):
             present_nodes = self.present_nodes(np.array([timestep]))
 
             for node in present_nodes[timestep]:
-                node_pos_dict[node] = np.squeeze(node.get(timestep_range, {'position': ['x', 'y']}))
-            tsg = TemporalSceneGraph.create_from_temp_scene_dict(node_pos_dict,
-                                                                 attention_radius,
-                                                                 duration=(len(edge_removal_filter) + 1),
-                                                                 edge_addition_filter=edge_addition_filter,
-                                                                 edge_removal_filter=edge_removal_filter
-                                                                 )
+                node_pos_dict[node] = np.squeeze(node.get(timestep_range, {"position": ["x", "y"]}))
+            tsg = TemporalSceneGraph.create_from_temp_scene_dict(
+                node_pos_dict,
+                attention_radius,
+                duration=(len(edge_removal_filter) + 1),
+                edge_addition_filter=edge_addition_filter,
+                edge_removal_filter=edge_removal_filter,
+            )
 
-            return tsg.to_scene_graph(t=len(edge_removal_filter),
-                                      t_hist=len(edge_removal_filter),
-                                      t_fut=len(edge_addition_filter))
+            return tsg.to_scene_graph(
+                t=len(edge_removal_filter),
+                t_hist=len(edge_removal_filter),
+                t_fut=len(edge_addition_filter),
+            )
         else:
-            return self.temporal_scene_graph.to_scene_graph(timestep,
-                                                            len(edge_removal_filter),
-                                                            len(edge_addition_filter))
+            return self.temporal_scene_graph.to_scene_graph(
+                timestep, len(edge_removal_filter), len(edge_addition_filter)
+            )
 
-    def calculate_scene_graph(self,
-                              attention_radius,
-                              edge_addition_filter=None,
-                              edge_removal_filter=None) -> None:
+    def calculate_scene_graph(
+        self, attention_radius, edge_addition_filter=None, edge_removal_filter=None
+    ) -> None:
         """
         Calculate the Temporal Scene Graph for the entire Scene.
 
@@ -97,20 +111,24 @@ class Scene(object):
         :param edge_removal_filter: Filter for removing edges.
         :return: None
         """
-        timestep_range = np.array([0, self.timesteps-1])
+        timestep_range = np.array([0, self.timesteps - 1])
         node_pos_dict = dict()
 
         for node in self.nodes:
             if type(node) is MultiNode:
-                node_pos_dict[node] = np.squeeze(node.get_all(timestep_range, {'position': ['x', 'y']}))
+                node_pos_dict[node] = np.squeeze(
+                    node.get_all(timestep_range, {"position": ["x", "y"]})
+                )
             else:
-                node_pos_dict[node] = np.squeeze(node.get(timestep_range, {'position': ['x', 'y']}))
+                node_pos_dict[node] = np.squeeze(node.get(timestep_range, {"position": ["x", "y"]}))
 
-        self.temporal_scene_graph = TemporalSceneGraph.create_from_temp_scene_dict(node_pos_dict,
-                                                                                   attention_radius,
-                                                                                   duration=self.timesteps,
-                                                                                   edge_addition_filter=edge_addition_filter,
-                                                                                   edge_removal_filter=edge_removal_filter)
+        self.temporal_scene_graph = TemporalSceneGraph.create_from_temp_scene_dict(
+            node_pos_dict,
+            attention_radius,
+            duration=self.timesteps,
+            edge_addition_filter=edge_addition_filter,
+            edge_removal_filter=edge_removal_filter,
+        )
 
     def duration(self):
         """
@@ -120,12 +138,14 @@ class Scene(object):
         """
         return self.timesteps * self.dt
 
-    def present_nodes(self,
-                      timesteps,
-                      type=None,
-                      min_history_timesteps=0,
-                      min_future_timesteps=0,
-                      return_robot=True) -> dict:
+    def present_nodes(
+        self,
+        timesteps,
+        type=None,
+        min_history_timesteps=0,
+        min_future_timesteps=0,
+        return_robot=True,
+    ) -> dict:
         """
         Finds all present nodes in the scene at a given timestemp
 
@@ -200,7 +220,9 @@ class Scene(object):
         """
         if batch_size > self.timesteps:
             batch_size = self.timesteps
-        return np.random.choice(np.arange(0, self.timesteps-min_future_timesteps), size=batch_size, replace=False)
+        return np.random.choice(
+            np.arange(0, self.timesteps - min_future_timesteps), size=batch_size, replace=False
+        )
 
     def augment(self):
         if self.aug_func is not None:
@@ -214,6 +236,8 @@ class Scene(object):
                 return node
 
     def __repr__(self):
-        return f"Scene: Duration: {self.duration()}s," \
-               f" Nodes: {len(self.nodes)}," \
-               f" Map: {'Yes' if self.map is not None else 'No'}."
+        return (
+            f"Scene: Duration: {self.duration()}s,"
+            f" Nodes: {len(self.nodes)},"
+            f" Map: {'Yes' if self.map is not None else 'No'}."
+        )
